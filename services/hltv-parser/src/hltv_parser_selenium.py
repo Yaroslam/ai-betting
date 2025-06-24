@@ -39,9 +39,9 @@ class HLTVParserSelenium:
             firefox_options.add_argument("--headless")
             firefox_options.add_argument("--no-sandbox")
             firefox_options.add_argument("--disable-dev-shm-usage")
-            firefox_options.add_argument("--window-size=1920,1080")
+            firefox_options.add_argument("--window-size=1280,720")
             
-            # Настраиваем профиль Firefox
+            # Настраиваем профиль Firefox для максимальной скорости
             firefox_profile = webdriver.FirefoxProfile()
             
             # Реалистичный User-Agent
@@ -50,12 +50,34 @@ class HLTVParserSelenium:
             # Отключаем изображения для ускорения
             firefox_profile.set_preference("permissions.default.image", 2)
             
-            # Включаем JavaScript для получения статистики (может потребоваться для динамического контента)
-            firefox_profile.set_preference("javascript.enabled", True)
+            # Отключаем JavaScript для ускорения
+            firefox_profile.set_preference("javascript.enabled", False)
             
             # Настройки для обхода детекции
             firefox_profile.set_preference("dom.webdriver.enabled", False)
             firefox_profile.set_preference("useAutomationExtension", False)
+            
+            # Агрессивные настройки для ускорения
+            firefox_profile.set_preference("network.http.pipelining", True)
+            firefox_profile.set_preference("network.http.proxy.pipelining", True)
+            firefox_profile.set_preference("network.http.pipelining.maxrequests", 8)
+            firefox_profile.set_preference("content.notify.interval", 500000)
+            firefox_profile.set_preference("content.notify.ontimer", True)
+            firefox_profile.set_preference("content.switch.threshold", 250000)
+            firefox_profile.set_preference("browser.cache.memory.capacity", 65536)
+            firefox_profile.set_preference("browser.startup.homepage", "about:blank")
+            firefox_profile.set_preference("browser.startup.page", 0)
+            firefox_profile.set_preference("browser.cache.disk.enable", False)
+            firefox_profile.set_preference("browser.cache.memory.enable", False)
+            firefox_profile.set_preference("browser.cache.offline.enable", False)
+            firefox_profile.set_preference("network.http.use-cache", False)
+            firefox_profile.set_preference("browser.turbo.enabled", True)
+            firefox_profile.set_preference("browser.display.show_image_placeholders", False)
+            firefox_profile.set_preference("browser.urlbar.maxRichResults", 0)
+            firefox_profile.set_preference("network.dns.disableIPv6", True)
+            firefox_profile.set_preference("content.interrupt.parsing", True)
+            firefox_profile.set_preference("content.max.tokenizing.time", 200000)
+            firefox_profile.set_preference("content.switch.threshold", 650000)
             
             # В новых версиях Selenium профиль передается через опции
             firefox_options.profile = firefox_profile
@@ -80,11 +102,14 @@ class HLTVParserSelenium:
                 if attempt > 0:
                     time.sleep(5 + attempt * 2)
                 
+                # Устанавливаем очень короткий таймаут для страницы
+                self.driver.set_page_load_timeout(15)  # 15 секунд максимум
+                
                 # Загружаем страницу
                 self.driver.get(url)
                 
                 # Ждем загрузки страницы и динамического контента
-                time.sleep(5 + attempt * 2)
+                time.sleep(2 + attempt)
                 
                 # Проверяем, что страница загрузилась
                 if "Access Denied" in self.driver.title or "403" in self.driver.title:
