@@ -1,6 +1,6 @@
-# 🚀 Быстрый старт: Единая PHP система миграций
+# 🚀 Быстрый старт: Laravel-style система миграций
 
-Быстрое начало работы с миграциями для PostgreSQL и ClickHouse на чистом PHP.
+Laravel-подобная система миграций для PostgreSQL и ClickHouse с полной поддержкой отката.
 
 ## ⚡ **Установка за 3 шага**
 
@@ -15,7 +15,7 @@ composer install
 
 ```bash
 # Скопировать настройки
-cp env.example .env
+cp .env.example .env
 
 # Отредактировать под ваши БД
 nano .env
@@ -24,140 +24,212 @@ nano .env
 ### 3️⃣ Первый запуск
 
 ```bash
-# Проверить подключение к PostgreSQL
-php bin/migrate.php postgres status
+# Проверить статус PostgreSQL миграций
+php artisan migrate:status
 
-# Проверить подключение к ClickHouse  
-php bin/migrate.php clickhouse status
+# Проверить статус ClickHouse миграций
+php artisan migrate:clickhouse
 ```
 
-## 🎯 **Основные команды**
+## 🎯 **Основные команды PostgreSQL**
 
 ### Создание миграций
 
 ```bash
-# PostgreSQL - основная БД
-php bin/migrate.php postgres create "create_users_table"
+# Создать новую миграцию
+php artisan make:migration create_users_table
 
-# ClickHouse - аналитика
-php bin/migrate.php clickhouse create "create_events_table"
+# Создать миграцию для новой таблицы
+php artisan make:migration create_users_table --create=users
+
+# Создать миграцию для изменения таблицы
+php artisan make:migration add_email_to_users_table --table=users
 ```
 
 ### Выполнение миграций
 
 ```bash
-# Применить все PostgreSQL миграции
-php bin/migrate.php postgres migrate
+# Выполнить все ожидающие миграции
+php artisan migrate
 
-# Применить все ClickHouse миграции
-php bin/migrate.php clickhouse migrate
+# Принудительное выполнение в production
+php artisan migrate --force
 ```
 
 ### Проверка статуса
 
 ```bash
-# Статус PostgreSQL
-php bin/migrate.php postgres status
-
-# Статус ClickHouse
-php bin/migrate.php clickhouse status
+# Показать статус всех миграций
+php artisan migrate:status
 ```
 
-## 📝 **Пример: Создание таблицы пользователей**
+### Откат миграций
+
+```bash
+# Откатить последний батч миграций
+php artisan migrate:rollback
+
+# Откатить определенное количество миграций
+php artisan migrate:rollback --steps=3
+
+# Откатить все миграции
+php artisan migrate:reset
+
+# Откатить все и выполнить заново
+php artisan migrate:refresh
+```
+
+## 🎯 **Основные команды ClickHouse**
+
+### Создание миграций
+
+```bash
+# Создать новую ClickHouse миграцию
+php artisan make:clickhouse-migration create_events_table
+```
+
+### Выполнение миграций
+
+```bash
+# Выполнить все ClickHouse миграции
+php artisan migrate:clickhouse
+
+# Принудительное выполнение в production
+php artisan migrate:clickhouse --force
+```
+
+## 📝 **Пример: Создание таблицы пользователей PostgreSQL**
 
 ### Шаг 1: Создать миграцию
 
 ```bash
-php bin/migrate.php postgres create "create_users_table"
+php artisan make:migration create_users_table --create=users
 ```
 
-### Шаг 2: Написать SQL (файл создается автоматически)
+### Шаг 2: Отредактировать файл миграции
 
-**migrations/postgres/up/20241201120000_create_users_table.sql:**
+**migrations/2025_06_25_220000_create_users_table.php:**
 
-```sql
--- Up migration: create_users_table
--- PostgreSQL Migration
+```php
+<?php
 
-CREATE TABLE users (
-    id SERIAL PRIMARY KEY,
-    username VARCHAR(255) NOT NULL UNIQUE,
-    email VARCHAR(255) NOT NULL UNIQUE,
-    telegram_id BIGINT UNIQUE,
-    password_hash VARCHAR(255) NOT NULL,
-    balance DECIMAL(10,2) DEFAULT 0.00,
-    is_premium BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
 
--- Indexes for performance
-CREATE INDEX idx_users_username ON users(username);
-CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_users_telegram_id ON users(telegram_id);
-```
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('users', function (Blueprint $table) {
+            $table->id();
+            $table->string('username')->unique();
+            $table->string('email')->unique();
+            $table->bigInteger('telegram_id')->unique()->nullable();
+            $table->string('password_hash');
+            $table->decimal('balance', 10, 2)->default(0.00);
+            $table->boolean('is_premium')->default(false);
+            $table->timestamps();
+            
+            // Indexes
+            $table->index('username');
+            $table->index('email');
+            $table->index('telegram_id');
+        });
+    }
 
-**migrations/postgres/down/20241201120000.sql:**
-
-```sql
--- Down migration: create_users_table
--- PostgreSQL Migration
-
-DROP TABLE IF EXISTS users;
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('users');
+    }
+};
 ```
 
 ### Шаг 3: Применить миграцию
 
 ```bash
-php bin/migrate.php postgres migrate
+php artisan migrate
 ```
 
-## 📊 **Пример: Аналитическая таблица**
+## 📊 **Пример: Аналитическая таблица ClickHouse**
 
-### Создать ClickHouse миграцию
+### Шаг 1: Создать ClickHouse миграцию
 
 ```bash
-php bin/migrate.php clickhouse create "create_user_events"
+php artisan make:clickhouse-migration create_user_events
 ```
 
-**migrations/clickhouse/up/20241201130000_create_user_events.sql:**
+### Шаг 2: Отредактировать файл миграции
 
-```sql
--- Up migration: create_user_events
--- ClickHouse Migration
+**clickhouse-migrations/2025_06_25_220100_create_user_events.php:**
 
-CREATE TABLE user_events (
-    id UInt64,
-    user_id UInt64,
-    event_type LowCardinality(String),
-    event_data String, -- JSON
-    timestamp DateTime64(3),
-    session_id String,
-    ip_address IPv4,
-    user_agent String,
-    created_at DateTime DEFAULT now()
-) ENGINE = MergeTree()
-ORDER BY (event_type, timestamp, user_id)
-PARTITION BY toYYYYMM(timestamp)
-SETTINGS index_granularity = 8192;
+```php
+<?php
 
--- Дополнительные индексы для быстрого поиска
-ALTER TABLE user_events ADD INDEX idx_user_id user_id TYPE bloom_filter GRANULARITY 1;
-ALTER TABLE user_events ADD INDEX idx_session_id session_id TYPE bloom_filter GRANULARITY 1;
+use Database\Migrations\ClickHouseMigration;
+
+return new class extends ClickHouseMigration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        $this->createTable('user_events', '
+            id UInt64,
+            user_id UInt64,
+            event_type LowCardinality(String),
+            event_data String,
+            timestamp DateTime64(3),
+            session_id String,
+            ip_address IPv4,
+            user_agent String,
+            created_at DateTime DEFAULT now()
+        ', 'MergeTree()', '(event_type, timestamp, user_id)');
+        
+        // Добавляем индексы для быстрого поиска
+        $this->addIndex('user_events', 'idx_user_id', 'user_id', 'bloom_filter');
+        $this->addIndex('user_events', 'idx_session_id', 'session_id', 'bloom_filter');
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        $this->dropTable('user_events');
+    }
+};
+```
+
+### Шаг 3: Применить миграцию
+
+```bash
+php artisan migrate:clickhouse
 ```
 
 ## 🔧 **Composer скрипты (быстрые команды)**
 
 ```bash
 # PostgreSQL
-composer run migrate:postgres              # Применить миграции
-composer run migrate:status:postgres       # Статус
-composer run migrate:reset:postgres        # Сброс БД
+composer run migrate                    # Применить миграции
+composer run migrate:status             # Статус миграций
+composer run migrate:rollback           # Откатить последний батч
+composer run migrate:reset              # Сбросить все миграции
+composer run migrate:refresh            # Сбросить и применить заново
 
 # ClickHouse  
-composer run migrate:clickhouse            # Применить миграции
-composer run migrate:status:clickhouse     # Статус
-composer run migrate:reset:clickhouse      # Сброс БД
+composer run migrate:clickhouse         # Применить ClickHouse миграции
+
+# Создание миграций
+composer run make:migration             # Создать PostgreSQL миграцию
+composer run make:clickhouse-migration  # Создать ClickHouse миграцию
 ```
 
 ## 🗂️ **Структура файлов**
@@ -167,86 +239,109 @@ composer run migrate:reset:clickhouse      # Сброс БД
 ```
 database/migrations/
 ├── .env                              # Ваши настройки БД
-├── migrations/
-│   ├── postgres/
-│   │   ├── up/
-│   │   │   └── 20241201120000_create_users_table.sql
-│   │   └── down/
-│   │       └── 20241201120000.sql
-│   └── clickhouse/
-│       ├── up/
-│       │   └── 20241201130000_create_user_events.sql
-│       └── down/
-│           └── 20241201130000.sql
-└── bin/migrate.php                   # Основной скрипт
+├── .env.example                      # Пример настроек
+├── artisan                           # Главный файл команд
+├── composer.json                     # Зависимости
+├── src/
+│   ├── Commands/                     # Команды миграций
+│   │   ├── MigrateMakeCommand.php
+│   │   ├── MigrateCommand.php
+│   │   ├── MigrateStatusCommand.php
+│   │   ├── MigrateRollbackCommand.php
+│   │   ├── MigrateResetCommand.php
+│   │   ├── MigrateRefreshCommand.php
+│   │   ├── ClickHouseMigrateCommand.php
+│   │   └── ClickHouseMakeMigrationCommand.php
+│   └── ClickHouseMigration.php       # Базовый класс для ClickHouse
+├── migrations/                       # PostgreSQL миграции
+│   └── 2025_06_25_220000_create_users_table.php
+├── clickhouse-migrations/            # ClickHouse миграции
+│   └── 2025_06_25_220100_create_user_events.php
+└── seeders/                         # Сидеры (будущие)
 ```
 
 ## ⚙️ **Настройка .env файла**
 
 ```bash
-# PostgreSQL (основная БД)
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-POSTGRES_DB=cs2_prediction
-POSTGRES_USER=cs2_user
-POSTGRES_PASSWORD=your_secure_password
+# Application
+APP_ENV=development
+APP_DEBUG=true
 
-# ClickHouse (аналитика)
+# PostgreSQL Configuration (Main Database)
+DB_CONNECTION=pgsql
+DB_HOST=localhost
+DB_PORT=5432
+DB_DATABASE=cs2_predictions
+DB_USERNAME=postgres
+DB_PASSWORD=postgres
+
+# ClickHouse Configuration (Analytics Database)
 CLICKHOUSE_HOST=localhost
-CLICKHOUSE_HTTP_PORT=8123
-CLICKHOUSE_DB=cs2_analytics
-CLICKHOUSE_USER=default
-CLICKHOUSE_PASSWORD=
+CLICKHOUSE_PORT=8123
+CLICKHOUSE_DATABASE=analytics
+CLICKHOUSE_USERNAME=clickhouse
+CLICKHOUSE_PASSWORD=clickhouse
+
+# Migration Settings
+MIGRATION_TABLE=migrations
+CLICKHOUSE_MIGRATION_TABLE=clickhouse_migrations
 ```
 
-## 🚨 **Частые проблемы и решения**
+## 🔄 **Рабочий процесс разработки**
 
-### ❌ "Database connection failed"
-
-**Решение:**
-1. Проверьте настройки в `.env`
-2. Убедитесь, что БД запущена
-3. Проверьте права доступа
-
-### ❌ "Migration table not found"
-
-**Решение:**
-```bash
-# Создать таблицу версий вручную
-php bin/migrate.php postgres reset
-php bin/migrate.php clickhouse reset
-```
-
-### ❌ "Permission denied"
-
-**Решение:**
-```bash
-# Дать права на выполнение
-chmod +x bin/migrate.php
-```
-
-## 🎉 **Готово!**
-
-Теперь у вас есть единая система миграций для обеих баз данных!
-
-### Следующие шаги:
-
-1. **Создайте базовые таблицы** для вашего проекта
-2. **Настройте CI/CD** для автоматического выполнения миграций
-3. **Изучите документацию** в README.md для продвинутых функций
-
-### Полезные команды для разработки:
+### 1. Создание новой функции
 
 ```bash
-# Проверить все статусы одной командой
-php bin/migrate.php postgres status && php bin/migrate.php clickhouse status
+# 1. Создать миграцию PostgreSQL
+php artisan make:migration create_matches_table --create=matches
 
-# Применить все миграции одной командой  
-php bin/migrate.php postgres migrate && php bin/migrate.php clickhouse migrate
+# 2. Создать миграцию ClickHouse для аналитики
+php artisan make:clickhouse-migration create_match_analytics
 
-# Создать миграции для новой функции
-php bin/migrate.php postgres create "add_matches_table"
-php bin/migrate.php clickhouse create "add_match_analytics"
+# 3. Отредактировать файлы миграций
+# 4. Применить миграции
+php artisan migrate
+php artisan migrate:clickhouse
 ```
 
-**Удачной разработки! 🚀** 
+### 2. Изменение существующей структуры
+
+```bash
+# 1. Создать миграцию для изменения
+php artisan make:migration add_status_to_matches_table --table=matches
+
+# 2. Применить миграцию
+php artisan migrate
+
+# 3. Если что-то пошло не так - откатить
+php artisan migrate:rollback
+```
+
+### 3. Проверка состояния
+
+```bash
+# Проверить статус всех миграций
+php artisan migrate:status
+
+# Сбросить все и применить заново (осторожно!)
+php artisan migrate:refresh --force
+```
+
+## 💡 **Особенности новой системы**
+
+### ✅ **Преимущества:**
+
+- **Историчность**: Все миграции сохраняются в хронологическом порядке
+- **Откат**: Полная поддержка отката миграций для PostgreSQL
+- **Laravel-style**: Знакомый синтаксис для разработчиков Laravel
+- **Раздельность**: Отдельные системы для PostgreSQL и ClickHouse
+- **Батчи**: Группировка миграций по батчам для удобного отката
+- **Автоматизация**: Автоматическое создание таблиц миграций
+
+### 🎯 **Рекомендации:**
+
+- Всегда тестируйте миграции на тестовой БД
+- Делайте резервные копии перед применением в production
+- Используйте `--force` флаг только в production окружении
+- Пишите понятные имена миграций
+- Всегда реализуйте метод `down()` для возможности отката 

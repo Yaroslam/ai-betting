@@ -1,0 +1,76 @@
+#!/usr/bin/env php
+<?php
+
+/*
+|--------------------------------------------------------------------------
+| CS2 Predictions Migration System
+|--------------------------------------------------------------------------
+|
+| This is the Artisan command-line interface for managing database migrations.
+| Laravel-style migration system for PostgreSQL and ClickHouse databases.
+|
+*/
+
+use Illuminate\Console\Application;
+use Illuminate\Container\Container;
+use Illuminate\Database\Capsule\Manager as Capsule;
+use Illuminate\Events\Dispatcher;
+use Illuminate\Filesystem\Filesystem;
+use Database\Migrations\Commands\MigrateMakeCommand;
+use Database\Migrations\Commands\MigrateCommand;
+use Database\Migrations\Commands\MigrateStatusCommand;
+use Database\Migrations\Commands\MigrateRollbackCommand;
+use Database\Migrations\Commands\MigrateResetCommand;
+use Database\Migrations\Commands\MigrateRefreshCommand;
+use Database\Migrations\Commands\ClickHouseMigrateCommand;
+use Database\Migrations\Commands\ClickHouseMakeMigrationCommand;
+use Dotenv\Dotenv;
+
+require __DIR__ . '/vendor/autoload.php';
+require __DIR__ . '/src/helpers.php';
+
+// Load environment variables
+if (file_exists(__DIR__ . '/.env')) {
+    $dotenv = Dotenv::createImmutable(__DIR__);
+    $dotenv->load();
+}
+
+// Setup Illuminate Database
+$capsule = new Capsule;
+
+// Add PostgreSQL connection
+$capsule->addConnection([
+    'driver' => 'pgsql',
+    'host' => $_ENV['DB_HOST'] ?? 'localhost',
+    'port' => $_ENV['DB_PORT'] ?? '5432',
+    'database' => $_ENV['DB_DATABASE'] ?? 'cs2_predictions',
+    'username' => $_ENV['DB_USERNAME'] ?? 'postgres',
+    'password' => $_ENV['DB_PASSWORD'] ?? 'postgres',
+    'charset' => 'utf8',
+    'prefix' => '',
+    'schema' => 'public',
+], 'default');
+
+$capsule->setEventDispatcher(new Dispatcher(new Container));
+$capsule->setAsGlobal();
+$capsule->bootEloquent();
+
+// Create console application
+$container = new Container();
+$app = new Application($container, new Dispatcher($container), '1.0.0');
+$app->setName('CS2 Predictions Migration System');
+
+// Register commands
+$filesystem = new Filesystem();
+
+$app->add(new MigrateMakeCommand($filesystem));
+$app->add(new MigrateCommand());
+$app->add(new MigrateStatusCommand());
+$app->add(new MigrateRollbackCommand());
+$app->add(new MigrateResetCommand());
+$app->add(new MigrateRefreshCommand());
+$app->add(new ClickHouseMigrateCommand());
+$app->add(new ClickHouseMakeMigrationCommand($filesystem));
+
+// Run the application
+$app->run(); 

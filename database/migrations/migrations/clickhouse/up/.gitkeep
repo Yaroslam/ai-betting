@@ -1,6 +1,0 @@
-# ClickHouse UP migrations directory
-# Migration files will be created here automatically
-
-# Example files:
-# 20241201120000_create_events_table.sql
-# 20241201130000_add_analytics_table.sql 

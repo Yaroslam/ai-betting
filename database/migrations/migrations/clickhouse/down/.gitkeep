@@ -1,6 +1,0 @@
-# ClickHouse DOWN migrations directory
-# Rollback migration files will be created here automatically
-
-# Example files:
-# 20241201120000.sql (rollback for create_events_table)
-# 20241201130000.sql (rollback for add_analytics_table) 
