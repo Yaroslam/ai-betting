@@ -1,0 +1,408 @@
+# =============================================================================
+# CS2 Match Prediction System - .gitignore
+# =============================================================================
+
+# Environment variables and secrets
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+config.json
+secrets/
+
+# =============================================================================
+# IDE and Editor files
+# =============================================================================
+
+# IntelliJ IDEA / PhpStorm / PyCharm
+.idea/
+*.iml
+*.ipr
+*.iws
+.idea_modules/
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+
+# =============================================================================
+# Operating System files
+# =============================================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# =============================================================================
+# Python (hltv-parser, telegram-bot)
+# =============================================================================
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# poetry
+poetry.lock
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# =============================================================================
+# Go (prediction-service)
+# =============================================================================
+
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Dependency directories
+vendor/
+
+# Go workspace file
+go.work
+
+# Air (live reload)
+tmp/
+.air.toml
+
+# =============================================================================
+# PHP (payment-service)
+# =============================================================================
+
+# Composer dependencies
+/vendor/
+composer.phar
+composer.lock
+
+# Laravel specific
+.env
+.env.backup
+.phpunit.result.cache
+/public/hot
+/public/storage
+/storage/*.key
+/storage/app/
+/storage/framework/cache/
+/storage/framework/sessions/
+/storage/framework/testing/
+/storage/framework/views/
+/storage/logs/
+bootstrap/cache/
+.env.example
+
+# Symfony specific
+/var/
+/public/bundles/
+/public/build/
+symfony.lock
+
+# PHPUnit
+phpunit.xml
+/phpunit.xml
+
+# PHP CS Fixer
+.php_cs.cache
+.php-cs-fixer.cache
+
+# =============================================================================
+# Scala/SBT (analytics-web)
+# =============================================================================
+
+# sbt
+target/
+project/target/
+project/project/
+.sbt
+dist/
+
+# Scala IDE
+.scala_dependencies
+.worksheet
+.cache-main
+.cache-tests
+
+# Play Framework
+logs/
+project/project/
+project/target/
+target/
+tmp/
+.history
+dist/
+/.idea
+/*.iml
+/out/
+/.idea_modules/
+/.classpath
+/.project
+/RUNNING_PID
+/.settings
+/bin/
+/eclipse
+
+# =============================================================================
+# Docker
+# =============================================================================
+
+# Docker volumes
+docker-volumes/
+*.dockerignore
+
+# =============================================================================
+# Databases
+# =============================================================================
+
+# PostgreSQL
+*.dump
+*.backup
+
+# ClickHouse
+clickhouse-data/
+*.clickhouse
+
+# SQLite
+*.sqlite3
+*.db
+
+# =============================================================================
+# Message Queues
+# =============================================================================
+
+# RabbitMQ
+rabbitmq-data/
+rabbitmq-logs/
+
+# =============================================================================
+# Logs and temporary files
+# =============================================================================
+
+# Log files
+*.log
+logs/
+log/
+tmp/
+temp/
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+
+# nyc test coverage
+.nyc_output
+
+# Grunt intermediate storage
+.grunt
+
+# Bower dependency directory
+bower_components
+
+# node_modules (if any Node.js tools are used)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# =============================================================================
+# Monitoring and Analytics
+# =============================================================================
+
+# Prometheus
+prometheus-data/
+
+# Grafana
+grafana-data/
+
+# =============================================================================
+# Backup files
+# =============================================================================
+
+*.bak
+*.backup
+*.old
+*.orig
+*.save
+*.tmp
+
+# =============================================================================
+# Project specific
+# =============================================================================
+
+# Data directories
+data/
+datasets/
+parsed-data/
+
+# Model files
+models/
+*.model
+*.pkl
+
+# Cache directories
+cache/
+.cache/
+
+# Test data
+test-data/
+fixtures/
+
+# Generated documentation
+docs/build/
+docs/_build/
+
+# Certificates
+*.crt
+*.cer
+*.p12
+*.pfx 
