@@ -6,7 +6,7 @@ use Illuminate\Database\Capsule\Manager as DB;
 
 return new class extends Migration
 {
-    /**Давай немного изменим структуру базы данных. Удали таблицы event_types countries
+    /**
      * Run the migrations.
      */
     public function up(): void
