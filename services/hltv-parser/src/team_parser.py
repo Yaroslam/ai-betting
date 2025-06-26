@@ -239,95 +239,52 @@ class TeamParser:
                 'points': None,
                 'hltv_url': '',
                 'hltv_id': None,
-                'player_urls': []
+                'players': [] # Оставляем для совместимости
             }
+
+            # Ранг
+            rank_elem = team_row.find('span', class_='position')
+            if rank_elem:
+                team_info['rank'] = int(rank_elem.text.replace('#', '').strip())
+
+            # Имя
+            name_elem = team_row.find('span', class_='name')
+            if name_elem:
+                team_info['name'] = name_elem.text.strip()
             
-            # Получаем весь текст элемента для анализа
-            row_text = team_row.get_text()
-            
-            # Ищем ссылку на команду (самый надежный способ)
-            team_link = team_row.find('a', href=re.compile(r'/team/\d+/'))
-            if not team_link:
-                logger.warning(f"Не найдена ссылка на команду в элементе: {row_text[:100]}...")
-                return None
-            
-            # Название команды и ссылка
-            team_info['name'] = team_link.text.strip()
-            href = team_link.get('href', '')
-            team_info['hltv_url'] = self.BASE_URL + href
-            
-            # Извлекаем ID команды из URL
-            id_match = re.search(r'/team/(\d+)/', href)
-            if id_match:
-                team_info['hltv_id'] = int(id_match.group(1))
-            
-            # Ищем рейтинг (ищем числа с # или просто числа в начале)
-            rank_patterns = [
-                r'#(\d+)',  # #1, #2, etc.
-                r'^(\d+)\.',  # 1., 2., etc. в начале строки
-                r'\b(\d+)\b'  # любое число
-            ]
-            
-            for pattern in rank_patterns:
-                rank_match = re.search(pattern, row_text)
-                if rank_match:
-                    try:
-                        potential_rank = int(rank_match.group(1))
-                        if 1 <= potential_rank <= 100:  # Разумный диапазон для рейтинга
-                            team_info['rank'] = potential_rank
-                            break
-                    except:
-                        continue
-            
-            # Ищем очки (числа с 'points', 'pts' или просто большие числа)
-            points_patterns = [
-                r'(\d+)\s*(?:points?|pts?)',
-                r'\((\d+)\)',  # Числа в скобках
-                r'(\d{3,})'  # Числа от 100 и больше (вероятно очки)
-            ]
-            
-            for pattern in points_patterns:
-                points_match = re.search(pattern, row_text, re.IGNORECASE)
+            # Очки
+            points_elem = team_row.find('span', class_='points')
+            if points_elem:
+                points_match = re.search(r'(\d+)', points_elem.text)
                 if points_match:
-                    try:
-                        potential_points = int(points_match.group(1))
-                        if potential_points >= 100:  # Минимальные очки для топ команд
-                            team_info['points'] = potential_points
-                            break
-                    except:
-                        continue
+                    team_info['points'] = int(points_match.group(1))
             
-            # Ищем ссылки на игроков
-            player_links = team_row.find_all('a', href=re.compile(r'/player/\d+/'))
-            for player_link in player_links:
-                player_url = self.BASE_URL + player_link.get('href', '')
-                team_info['player_urls'].append(player_url)
+            # Ссылка и ID
+            more_div = team_row.find('div', class_='more')
+            team_link_tag = None
+            if more_div:
+                team_link_tag = more_div.find('a', href=re.compile(r'/team/\d+'))
+
+            if team_link_tag and 'href' in team_link_tag.attrs:
+                team_info['hltv_url'] = self.BASE_URL + team_link_tag['href']
+                id_match = re.search(r'/team/(\d+)/', team_info['hltv_url'])
+                if id_match:
+                    team_info['hltv_id'] = int(id_match.group(1))
             
-            # Если не нашли рейтинг, попробуем извлечь из контекста
-            if team_info['rank'] is None:
-                # Ищем числа в соседних элементах
-                parent = team_row.parent
-                if parent:
-                    siblings = parent.find_all(['td', 'div', 'span'])
-                    for sibling in siblings:
-                        sibling_text = sibling.get_text().strip()
-                        rank_match = re.search(r'^#?(\d+)$', sibling_text)
-                        if rank_match:
-                            try:
-                                rank = int(rank_match.group(1))
-                                if 1 <= rank <= 100:
-                                    team_info['rank'] = rank
-                                    break
-                            except:
-                                continue
-            
-            logger.info(f"Извлечена информация о команде: {team_info['name']} (#{team_info['rank']}, {team_info['points']} очков)")
+            # Извлечение игроков
+            player_elements = team_row.find_all('td', class_='player-holder')
+            for player_elem in player_elements:
+                link = player_elem.find('a')
+                if link and 'href' in link.attrs:
+                    player_url = self.BASE_URL + link['href']
+                    player_id, nickname = self._extract_player_id_and_nickname(player_url)
+                    if player_id and nickname:
+                        team_info['players'].append({'id': player_id, 'nickname': nickname, 'url': player_url})
+
             return team_info
             
         except Exception as e:
             logger.error(f"Ошибка при извлечении информации о команде: {e}")
-            import traceback
-            traceback.print_exc()
             return None
     
     def _extract_player_id_and_nickname(self, player_url: str) -> Optional[Tuple[int, str]]:
@@ -345,101 +302,70 @@ class TeamParser:
             return None
     
     def parse_team_ranking(self, max_teams: int = 30) -> List[Dict[str, Any]]:
-        """Парсить рейтинг команд"""
-        logger.info(f"Начинаем парсинг рейтинга команд (топ {max_teams})")
+        """
+        Парсить мировой рейтинг команд и информацию об игроках в них.
         
-        # Загружаем страницу рейтинга
+        Args:
+            max_teams (int): Максимальное количество команд для парсинга.
+        
+        Returns:
+            List[Dict[str, Any]]: Список словарей с данными команд.
+        """
+        logger.info(f"Начинаем парсинг топ-{max_teams} команд...")
+        
         soup = self._fetch_ranking_page()
         if not soup:
-            logger.error("Не удалось загрузить страницу рейтинга команд")
+            logger.error("Не удалось загрузить страницу рейтинга команд.")
             return []
-        
+            
         teams = []
+        # Обновляем селектор на правильный
+        ranked_team_rows = soup.find_all('div', class_='ranked-team')
         
-        # Ищем строки с командами - используем более широкий поиск
-        team_rows = []
-        
-        # Сначала пробуем найти любые ссылки на команды
-        team_links = soup.find_all('a', href=re.compile(r'/team/\d+/'))
-        logger.info(f"Найдено ссылок на команды: {len(team_links)}")
-        
-        if team_links:
-            # Группируем ссылки по родительским элементам
-            seen_teams = set()
-            for link in team_links:
-                team_name = link.text.strip()
-                if team_name and team_name not in seen_teams:
-                    # Ищем родительский элемент, который содержит всю информацию о команде
-                    parent = link.parent
-                    while parent and parent.name != 'body':
-                        # Проверяем, содержит ли родитель рейтинг или очки
-                        parent_text = parent.get_text()
-                        if any(keyword in parent_text.lower() for keyword in ['#', 'points', 'pts', 'rank']):
-                            team_rows.append(parent)
-                            seen_teams.add(team_name)
-                            break
-                        parent = parent.parent
-        
-        # Если не нашли через ссылки, пробуем стандартные селекторы
-        if not team_rows:
-            team_rows = soup.find_all('div', class_='ranked-team')
-        
-        if not team_rows:
-            team_rows = soup.find_all('tr', class_=re.compile(r'team-row|ranking-row'))
-        
-        if not team_rows:
-            # Ищем все строки таблицы, которые могут содержать команды
-            all_rows = soup.find_all('tr')
-            team_rows = [row for row in all_rows if row.find('a', href=re.compile(r'/team/\d+/'))]
-        
-        logger.info(f"Найдено строк с командами: {len(team_rows)}")
-        
-        for i, team_row in enumerate(team_rows[:max_teams]):
-            try:
-                logger.info(f"Обрабатываем команду {i + 1} из {min(len(team_rows), max_teams)}")
-                
-                team_info = self._extract_team_info(team_row)
-                if not team_info or not team_info['name']:
-                    continue
-                
-                # Парсим игроков команды
-                team_info['players'] = []
-                for player_url in team_info['player_urls']:
-                    player_data = self._extract_player_id_and_nickname(player_url)
-                    if player_data:
-                        player_id, nickname = player_data
-                        
-                        # Создаем парсер игроков, если еще не создан
-                        if not self.player_parser:
-                            self.player_parser = PlayerParser()
-                        
-                        # Парсим информацию об игроке
-                        logger.info(f"Парсим игрока: {nickname} (ID: {player_id})")
-                        player_info = self.player_parser.parse_player(player_id, nickname)
-                        
-                        if player_info:
-                            team_info['players'].append(player_info)
-                            # Сохраняем игрока в базу данных
-                            self.player_parser.save_player_to_database(player_info)
-                        
-                        # Пауза между парсингом игроков
-                        player_delay = 5
-                        logger.info(f"Пауза {player_delay} секунд перед следующим игроком...")
-                        time.sleep(player_delay)
-                
-                teams.append(team_info)
-                logger.info(f"Команда {team_info['name']} обработана успешно")
-                
-                # Пауза между обработкой команд
-                team_delay = 3
-                logger.info(f"Пауза {team_delay} секунд перед следующей командой...")
-                time.sleep(team_delay)
-                
-            except Exception as e:
-                logger.error(f"Ошибка при обработке команды {i + 1}: {e}")
+        logger.info(f"Найдено {len(ranked_team_rows)} команд на странице.")
+
+        for i, team_row in enumerate(ranked_team_rows):
+            if len(teams) >= max_teams:
+                logger.info(f"Достигнут лимит в {max_teams} команд.")
+                break
+
+            logger.info(f"Парсинг команды #{i + 1}...")
+            
+            team_data = self._extract_team_info(team_row)
+            if not team_data:
+                logger.warning(f"Пропуск команды #{i + 1}, не удалось извлечь базовые данные.")
                 continue
-        
-        logger.info(f"Парсинг рейтинга команд завершен. Обработано команд: {len(teams)}")
+
+            # Инициализируем парсер игроков, если он еще не создан
+            if not self.player_parser:
+                self.player_parser = PlayerParser()
+                # Передаем тот же драйвер, чтобы не создавать новый
+                self.player_parser.driver = self.driver
+
+            # Парсим игроков этой команды
+            parsed_players = []
+            if team_data.get('players'):
+                logger.info(f"Начинаем парсинг игроков для команды {team_data['name']}...")
+                for player_info in team_data['players']:
+                    player_data = self.player_parser.parse_player(player_info['id'], player_info['nickname'])
+                    if player_data:
+                        parsed_players.append(player_data)
+                        logger.info(f"  - Игрок {player_info['nickname']} спарсен успешно.")
+                    else:
+                        logger.warning(f"  - Не удалось спарсить игрока {player_info['nickname']}.")
+                    
+                    # Задержка между запросами к игрокам
+                    time.sleep(5)
+            
+            team_data['players'] = parsed_players
+            teams.append(team_data)
+            
+            logger.info(f"Команда {team_data['name']} и ее игроки спарсены. Всего команд: {len(teams)}/{max_teams}")
+            
+            # Задержка между запросами к командам
+            time.sleep(10)
+
+        logger.info(f"Парсинг топ-{len(teams)} команд завершен.")
         return teams
     
     def save_team_to_database(self, team_data: Dict[str, Any]) -> bool:

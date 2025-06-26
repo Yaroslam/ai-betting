@@ -228,4 +228,10 @@ def create_or_get_event(db: Session, name: str, event_type: str = "Tournament") 
     db.add(new_event)
     db.commit()
     db.refresh(new_event)
-    return new_event 
+    return new_event
+
+def get_team_by_name(db: Session, team_name: str) -> Optional[Team]:
+    """
+    Найти команду по ее точному названию.
+    """
+    return db.query(Team).filter(Team.name == team_name).first() 

@@ -227,20 +227,9 @@ class PlayerParser:
             if real_name_elem:
                 player_info['real_name'] = real_name_elem.text.strip()
             
-            # Страна
-            country_elem = soup.find('img', class_='summaryCountryFlag')
-            if country_elem:
-                player_info['country_code'] = country_elem.get('alt', '').upper()[:3]
-                player_info['country_name'] = country_elem.get('title', '')
-            
-            # Возраст
-            age_elem = soup.find('span', class_='summaryPlayerAge')
-            if age_elem:
-                age_text = age_elem.text.strip()
-                age_match = re.search(r'(\d+)', age_text)
-                if age_match:
-                    player_info['age'] = int(age_match.group(1))
-            
+            # Извлечение страны и возраста оказалось ненадежным из-за динамической загрузки,
+            # поэтому эти поля могут оставаться пустыми.
+
             logger.info(f"Базовая информация извлечена: {player_info['nickname']} ({player_info['real_name']})")
             
         except Exception as e:
@@ -256,150 +245,56 @@ class PlayerParser:
             'adr': None,
             'kd_ratio': None,
             'kast': None,
-            'dpr': None,  # Deaths per round
-            'kpr': None,  # Kills per round
+            'dpr': None,
+            'kpr': None,
             'maps_played': 0
         }
         
         try:
-            # Ищем статистику в блоке summaryStatBreakdown
-            stat_blocks = soup.find_all('div', class_='summaryStatBreakdownRow')
-            
-            for block in stat_blocks:
-                try:
-                    # Ищем название статистики
-                    data_name = block.find('div', class_='summaryStatBreakdownDataName')
-                    data_value = block.find('div', class_='summaryStatBreakdownDataValue')
-                    
-                    if data_name and data_value:
-                        stat_name = data_name.text.strip().lower()
-                        stat_value = data_value.text.strip()
-                        
-                        # Rating 2.0
-                        if 'rating' in stat_name:
-                            try:
-                                rating = float(stat_value)
-                                if 0.5 <= rating <= 2.5:
-                                    stats['rating_2_0'] = rating
-                            except:
-                                pass
-                        
-                        # K/D Ratio
-                        elif 'k/d' in stat_name:
-                            try:
-                                stats['kd_ratio'] = float(stat_value)
-                            except:
-                                pass
-                        
-                        # ADR (Average Damage per Round)
-                        elif 'adr' in stat_name:
-                            try:
-                                stats['adr'] = float(stat_value)
-                            except:
-                                pass
-                        
-                        # KAST
-                        elif 'kast' in stat_name:
-                            try:
-                                kast_clean = stat_value.replace('%', '')
-                                stats['kast'] = float(kast_clean)
-                            except:
-                                pass
-                        
-                        # Impact
-                        elif 'impact' in stat_name:
-                            try:
-                                stats['impact'] = float(stat_value)
-                            except:
-                                pass
-                        
-                        # KPR (Kills per round)
-                        elif 'kpr' in stat_name or ('kill' in stat_name and 'round' in stat_name):
-                            try:
-                                stats['kpr'] = float(stat_value)
-                            except:
-                                pass
-                        
-                        # DPR (Deaths per round)
-                        elif 'dpr' in stat_name or ('death' in stat_name and 'round' in stat_name):
-                            try:
-                                stats['dpr'] = float(stat_value)
-                            except:
-                                pass
-                        
-                        # Maps played
-                        elif 'maps' in stat_name:
-                            try:
-                                stats['maps_played'] = int(stat_value)
-                            except:
-                                pass
-                        
-                except Exception as e:
-                    continue
-            
-            # Альтернативный поиск для статистики в других блоках
-            if not stats['rating_2_0']:
-                # Ищем Rating 2.0 в других местах
-                rating_elems = soup.find_all(text=re.compile(r'\d+\.\d{2}'))
-                for rating_elem in rating_elems:
+            # Новый подход: ищем все ряды статистики по классу 'stats-row'
+            stat_rows = soup.find_all('div', class_='stats-row')
+            for row in stat_rows:
+                children = row.find_all('span')
+                if len(children) == 2:
+                    stat_name = children[0].text.strip().lower()
+                    stat_value = children[1].text.strip()
+
                     try:
-                        parent = rating_elem.parent
-                        if parent and ('rating' in parent.get('class', []) or 'rating' in str(parent).lower()):
-                            rating = float(rating_elem.strip())
-                            if 0.5 <= rating <= 2.5:
-                                stats['rating_2_0'] = rating
-                                break
-                    except:
+                        if 'rating' in stat_name:
+                            stats['rating_2_0'] = float(stat_value)
+                        elif 'k/d ratio' in stat_name:
+                            stats['kd_ratio'] = float(stat_value)
+                        elif 'damage / round' in stat_name:
+                            stats['adr'] = float(stat_value)
+                        elif 'deaths / round' in stat_name:
+                            stats['dpr'] = float(stat_value)
+                        elif 'kills / round' in stat_name:
+                            stats['kpr'] = float(stat_value)
+                        elif 'maps played' in stat_name:
+                            stats['maps_played'] = int(stat_value)
+                    except (ValueError, IndexError):
+                        logger.warning(f"Не удалось обработать значение '{stat_value}' для '{stat_name}'")
                         continue
-            
-            # Поиск в таблицах статистики
-            tables = soup.find_all('table')
-            for table in tables:
-                if 'stats' in str(table.get('class', [])).lower():
-                    rows = table.find_all('tr')
-                    for row in rows:
-                        cells = row.find_all(['td', 'th'])
-                        if len(cells) >= 2:
-                            header = cells[0].text.strip().lower()
-                            value = cells[1].text.strip()
-                            
-                            try:
-                                if 'rating' in header and '2.0' in header:
-                                    rating = float(value)
-                                    if 0.5 <= rating <= 2.5:
-                                        stats['rating_2_0'] = rating
-                                elif 'k/d' in header:
-                                    stats['kd_ratio'] = float(value)
-                                elif 'adr' in header:
-                                    stats['adr'] = float(value)
-                                elif 'kast' in header:
-                                    kast_clean = value.replace('%', '')
-                                    stats['kast'] = float(kast_clean)
-                                elif 'impact' in header:
-                                    stats['impact'] = float(value)
-                                elif 'kpr' in header:
-                                    stats['kpr'] = float(value)
-                                elif 'dpr' in header:
-                                    stats['dpr'] = float(value)
-                            except:
-                                pass
-            
-            # Поиск статистики в основной области страницы
-            stat_containers = soup.find_all('div', class_=re.compile(r'stats|statistic'))
-            for container in stat_containers:
-                text_content = container.get_text().lower()
-                
-                # Ищем rating 2.0
-                if 'rating' in text_content and not stats['rating_2_0']:
-                    rating_match = re.search(r'rating.*?(\d+\.\d{2})', text_content)
-                    if rating_match:
-                        try:
-                            rating = float(rating_match.group(1))
-                            if 0.5 <= rating <= 2.5:
-                                stats['rating_2_0'] = rating
-                        except:
-                            pass
-            
+
+            # Старый подход для KAST и Impact, которые могут быть в другом блоке
+            stat_breakdown = soup.find_all('div', class_='summaryStatBreakdownRow')
+            for row in stat_breakdown:
+                data_name_div = row.find('div', class_='summaryStatBreakdownDataPoint')
+                data_value_div = row.find('div', class_='summaryStatBreakdownDataValue')
+
+                if data_name_div and data_value_div:
+                    stat_name = data_name_div.text.strip().lower()
+                    stat_value = data_value_div.text.strip()
+                    
+                    try:
+                        if 'impact' in stat_name:
+                            stats['impact'] = float(stat_value)
+                        elif 'kast' in stat_name:
+                            stats['kast'] = float(stat_value.replace('%', ''))
+                    except (ValueError, IndexError):
+                        logger.warning(f"Не удалось обработать значение (breakdown) '{stat_value}' для '{stat_name}'")
+                        continue
+
             # Логируем найденную статистику
             found_stats = {k: v for k, v in stats.items() if v is not None and v != 0}
             logger.info(f"Извлеченная статистика: {found_stats}")
