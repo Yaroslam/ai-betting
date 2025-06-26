@@ -36,9 +36,9 @@ class TeamParser:
         self._init_driver()
     
     def _init_driver(self):
-        """Инициализация headless Firefox драйвера"""
+        """Инициализация headless Firefox драйвера с обходом защиты от ботов"""
         try:
-            logger.info("Инициализируем headless Firefox для парсера команд...")
+            logger.info("Инициализируем stealth Firefox для парсера команд...")
             
             # Автоматически устанавливаем geckodriver
             geckodriver_autoinstaller.install()
@@ -48,35 +48,65 @@ class TeamParser:
             firefox_options.add_argument("--no-sandbox")
             firefox_options.add_argument("--disable-dev-shm-usage")
             firefox_options.add_argument("--window-size=1920,1080")
-            firefox_options.add_argument("--disable-blink-features=AutomationControlled")
             
-            # Настраиваем профиль Firefox для максимальной производительности
+            # Настраиваем профиль Firefox для обхода детекции ботов
             firefox_profile = webdriver.FirefoxProfile()
             
-            # Реалистичный User-Agent
-            firefox_profile.set_preference("general.useragent.override", 
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0")
+            # Стандартный User-Agent
+            user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0"
+            firefox_profile.set_preference("general.useragent.override", user_agent)
+            logger.info(f"Используем User-Agent: {user_agent}")
             
-            # Отключаем изображения для ускорения
-            firefox_profile.set_preference("permissions.default.image", 2)
+            # Загружаем изображения для более реалистичного поведения
+            firefox_profile.set_preference("permissions.default.image", 1)
             
-            # Настройки для обхода детекции
+            # Настройки для обхода детекции веб-драйвера
             firefox_profile.set_preference("dom.webdriver.enabled", False)
             firefox_profile.set_preference("useAutomationExtension", False)
+            firefox_profile.set_preference("marionette.enabled", False)
             
-            # Настройки для ускорения
-            firefox_profile.set_preference("network.http.pipelining", True)
-            firefox_profile.set_preference("browser.cache.disk.enable", False)
-            firefox_profile.set_preference("browser.cache.memory.enable", False)
-            firefox_profile.set_preference("network.http.use-cache", False)
+            # Отключаем автоматизацию в navigator
+            firefox_profile.set_preference("dom.disable_beforeunload", True)
+            firefox_profile.set_preference("dom.successive_dialog_time_limit", 0)
+            
+            # Настройки для имитации реального браузера
+            firefox_profile.set_preference("network.http.connection-retry-timeout", 0)
+            firefox_profile.set_preference("network.http.connection-timeout", 90)
+            firefox_profile.set_preference("network.http.response.timeout", 90)
+            
+            # Включаем JavaScript (нужен для HLTV)
+            firefox_profile.set_preference("javascript.enabled", True)
+            
+            # Настройки приватности
+            firefox_profile.set_preference("privacy.trackingprotection.enabled", False)
+            firefox_profile.set_preference("network.cookie.cookieBehavior", 0)
+            
+            # Языковые настройки
+            firefox_profile.set_preference("intl.accept_languages", "en-US,en;q=0.9")
+            
+            # Дополнительные настройки для обхода детекции
+            firefox_profile.set_preference("media.peerconnection.enabled", False)
+            firefox_profile.set_preference("media.navigator.enabled", False)
+            firefox_profile.set_preference("webgl.disabled", True)
+            firefox_profile.set_preference("media.autoplay.default", 0)
+            
+            # Настройки времени загрузки
+            firefox_profile.set_preference("network.http.connection-timeout", 120)
+            firefox_profile.set_preference("network.http.response.timeout", 120)
             
             firefox_options.profile = firefox_profile
             
             self.driver = webdriver.Firefox(options=firefox_options)
-            self.driver.set_page_load_timeout(45)
-            self.driver.implicitly_wait(10)
+            self.driver.set_page_load_timeout(60)  # Увеличиваем таймаут
+            self.driver.implicitly_wait(15)
             
-            logger.info("Headless Firefox для парсера команд инициализирован успешно")
+            # Устанавливаем размер окна для имитации реального браузера
+            self.driver.set_window_size(1920, 1080)
+            
+            # Выполняем JavaScript для дополнительного сокрытия автоматизации
+            self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+            
+            logger.info("Stealth Firefox для парсера команд инициализирован успешно")
             
         except Exception as e:
             logger.error(f"Ошибка инициализации Firefox драйвера: {e}")
@@ -103,7 +133,7 @@ class TeamParser:
         return year, month, day
     
     def _fetch_ranking_page(self, retries: int = 3) -> Optional[BeautifulSoup]:
-        """Загрузить страницу рейтинга команд"""
+        """Загрузить страницу рейтинга команд с имитацией человеческого поведения"""
         year, month, day = self._get_last_monday_date()
         url = f"{self.BASE_URL}/ranking/teams/{year}/{month}/{day}"
         
@@ -112,27 +142,61 @@ class TeamParser:
                 logger.info(f"Загружаем рейтинг команд (попытка {attempt + 1}): {url}")
                 
                 if attempt > 0:
-                    time.sleep(5 + attempt * 2)
-                
-                # Сначала загружаем главную страницу HLTV для получения cookies
-                if attempt == 0:
-                    try:
-                        self.driver.get(self.BASE_URL)
-                        time.sleep(2)
-                    except:
-                        pass
+                    delay = 15 + attempt * 10
+                    logger.info(f"Ждем {delay} секунд перед повторной попыткой...")
+                    time.sleep(delay)
                 
                 # Загружаем страницу рейтинга
+                logger.info(f"Загружаем страницу рейтинга: {url}")
                 self.driver.get(url)
                 
-                # Ждем загрузки контента
-                time.sleep(4 + attempt)
+                # Ждем загрузки
+                loading_delay = 8 + attempt * 3
+                logger.info(f"Ждем загрузки {loading_delay} секунд...")
+                time.sleep(loading_delay)
+                
+                # Проверяем заголовок страницы
+                page_title = self.driver.title
+                logger.info(f"Заголовок страницы: {page_title}")
+                
+                # Обрабатываем Cloudflare защиту
+                if "just a moment" in page_title.lower() or "checking your browser" in page_title.lower():
+                    logger.info("Обнаружена защита Cloudflare, ждем прохождения проверки...")
+                    
+                    # Ждем до 60 секунд пока Cloudflare не пропустит
+                    cloudflare_wait = 0
+                    max_cloudflare_wait = 60
+                    
+                    while cloudflare_wait < max_cloudflare_wait:
+                        time.sleep(5)
+                        cloudflare_wait += 5
+                        
+                        current_title = self.driver.title
+                        
+                        # Проверяем, прошли ли мы Cloudflare
+                        if "just a moment" not in current_title.lower() and "checking" not in current_title.lower():
+                            logger.info(f"Cloudflare пройден! Новый заголовок: {current_title}")
+                            page_title = current_title
+                            break
+                            
+                        if cloudflare_wait % 15 == 0:
+                            logger.info(f"Ждем Cloudflare... ({cloudflare_wait}/{max_cloudflare_wait}s)")
+                    
+                    if cloudflare_wait >= max_cloudflare_wait:
+                        logger.warning("Cloudflare не пропустил за отведенное время")
+                        if attempt < retries - 1:
+                            time.sleep(60)
+                            continue
+                        else:
+                            return None
                 
                 # Проверяем на блокировку или ошибки
-                if "Access Denied" in self.driver.title or "403" in self.driver.title or "Not Found" in self.driver.title:
-                    logger.warning(f"Страница заблокирована или не найдена (попытка {attempt + 1}): {self.driver.title}")
+                if any(keyword in page_title.lower() for keyword in ["access denied", "403", "forbidden", "blocked"]):
+                    logger.warning(f"Страница заблокирована (попытка {attempt + 1}): {page_title}")
                     if attempt < retries - 1:
-                        time.sleep(15 + attempt * 5)
+                        block_delay = 45 + attempt * 20
+                        logger.info(f"Ждем {block_delay} секунд из-за блокировки...")
+                        time.sleep(block_delay)
                         continue
                     else:
                         return None
@@ -141,8 +205,15 @@ class TeamParser:
                 html = self.driver.page_source
                 logger.info(f"Страница рейтинга загружена успешно, размер: {len(html)} символов")
                 
+                # Проверяем качество полученных данных
                 if len(html) < 1000:
                     logger.warning("Получена подозрительно короткая страница")
+                    if attempt < retries - 1:
+                        continue
+                
+                # Проверяем наличие ключевых элементов HLTV
+                if "hltv" not in html.lower() or "ranking" not in html.lower():
+                    logger.warning("Страница не содержит ожидаемый контент рейтинга HLTV")
                     if attempt < retries - 1:
                         continue
                 
@@ -151,7 +222,9 @@ class TeamParser:
             except Exception as e:
                 logger.error(f"Ошибка при загрузке рейтинга команд {url} (попытка {attempt + 1}): {e}")
                 if attempt < retries - 1:
-                    time.sleep(10 + attempt * 3)
+                    error_delay = 20 + attempt * 10
+                    logger.info(f"Ждем {error_delay} секунд после ошибки...")
+                    time.sleep(error_delay)
                     continue
                 return None
         
@@ -169,46 +242,92 @@ class TeamParser:
                 'player_urls': []
             }
             
-            # Место в рейтинге
-            rank_elem = team_row.find('span', class_='position')
-            if rank_elem:
-                try:
-                    team_info['rank'] = int(rank_elem.text.strip().replace('#', ''))
-                except:
-                    pass
+            # Получаем весь текст элемента для анализа
+            row_text = team_row.get_text()
+            
+            # Ищем ссылку на команду (самый надежный способ)
+            team_link = team_row.find('a', href=re.compile(r'/team/\d+/'))
+            if not team_link:
+                logger.warning(f"Не найдена ссылка на команду в элементе: {row_text[:100]}...")
+                return None
             
             # Название команды и ссылка
-            team_link = team_row.find('a', class_='teamName')
-            if team_link:
-                team_info['name'] = team_link.text.strip()
-                team_info['hltv_url'] = self.BASE_URL + team_link.get('href', '')
-                
-                # Извлекаем ID команды из URL
-                href = team_link.get('href', '')
-                id_match = re.search(r'/team/(\d+)/', href)
-                if id_match:
-                    team_info['hltv_id'] = int(id_match.group(1))
+            team_info['name'] = team_link.text.strip()
+            href = team_link.get('href', '')
+            team_info['hltv_url'] = self.BASE_URL + href
             
-            # Очки команды
-            points_elem = team_row.find('span', class_='points')
-            if points_elem:
-                try:
-                    points_text = points_elem.text.strip().replace('(', '').replace(')', '').replace(' points', '')
-                    team_info['points'] = int(points_text)
-                except:
-                    pass
+            # Извлекаем ID команды из URL
+            id_match = re.search(r'/team/(\d+)/', href)
+            if id_match:
+                team_info['hltv_id'] = int(id_match.group(1))
             
-            # Ссылки на игроков
-            player_links = team_row.find_all('a', href=re.compile(r'/player/'))
+            # Ищем рейтинг (ищем числа с # или просто числа в начале)
+            rank_patterns = [
+                r'#(\d+)',  # #1, #2, etc.
+                r'^(\d+)\.',  # 1., 2., etc. в начале строки
+                r'\b(\d+)\b'  # любое число
+            ]
+            
+            for pattern in rank_patterns:
+                rank_match = re.search(pattern, row_text)
+                if rank_match:
+                    try:
+                        potential_rank = int(rank_match.group(1))
+                        if 1 <= potential_rank <= 100:  # Разумный диапазон для рейтинга
+                            team_info['rank'] = potential_rank
+                            break
+                    except:
+                        continue
+            
+            # Ищем очки (числа с 'points', 'pts' или просто большие числа)
+            points_patterns = [
+                r'(\d+)\s*(?:points?|pts?)',
+                r'\((\d+)\)',  # Числа в скобках
+                r'(\d{3,})'  # Числа от 100 и больше (вероятно очки)
+            ]
+            
+            for pattern in points_patterns:
+                points_match = re.search(pattern, row_text, re.IGNORECASE)
+                if points_match:
+                    try:
+                        potential_points = int(points_match.group(1))
+                        if potential_points >= 100:  # Минимальные очки для топ команд
+                            team_info['points'] = potential_points
+                            break
+                    except:
+                        continue
+            
+            # Ищем ссылки на игроков
+            player_links = team_row.find_all('a', href=re.compile(r'/player/\d+/'))
             for player_link in player_links:
                 player_url = self.BASE_URL + player_link.get('href', '')
                 team_info['player_urls'].append(player_url)
             
-            logger.info(f"Извлечена информация о команде: {team_info['name']} (#{team_info['rank']})")
+            # Если не нашли рейтинг, попробуем извлечь из контекста
+            if team_info['rank'] is None:
+                # Ищем числа в соседних элементах
+                parent = team_row.parent
+                if parent:
+                    siblings = parent.find_all(['td', 'div', 'span'])
+                    for sibling in siblings:
+                        sibling_text = sibling.get_text().strip()
+                        rank_match = re.search(r'^#?(\d+)$', sibling_text)
+                        if rank_match:
+                            try:
+                                rank = int(rank_match.group(1))
+                                if 1 <= rank <= 100:
+                                    team_info['rank'] = rank
+                                    break
+                            except:
+                                continue
+            
+            logger.info(f"Извлечена информация о команде: {team_info['name']} (#{team_info['rank']}, {team_info['points']} очков)")
             return team_info
             
         except Exception as e:
             logger.error(f"Ошибка при извлечении информации о команде: {e}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def _extract_player_id_and_nickname(self, player_url: str) -> Optional[Tuple[int, str]]:
@@ -237,18 +356,41 @@ class TeamParser:
         
         teams = []
         
-        # Ищем строки с командами
-        team_rows = soup.find_all('div', class_='ranked-team')
+        # Ищем строки с командами - используем более широкий поиск
+        team_rows = []
+        
+        # Сначала пробуем найти любые ссылки на команды
+        team_links = soup.find_all('a', href=re.compile(r'/team/\d+/'))
+        logger.info(f"Найдено ссылок на команды: {len(team_links)}")
+        
+        if team_links:
+            # Группируем ссылки по родительским элементам
+            seen_teams = set()
+            for link in team_links:
+                team_name = link.text.strip()
+                if team_name and team_name not in seen_teams:
+                    # Ищем родительский элемент, который содержит всю информацию о команде
+                    parent = link.parent
+                    while parent and parent.name != 'body':
+                        # Проверяем, содержит ли родитель рейтинг или очки
+                        parent_text = parent.get_text()
+                        if any(keyword in parent_text.lower() for keyword in ['#', 'points', 'pts', 'rank']):
+                            team_rows.append(parent)
+                            seen_teams.add(team_name)
+                            break
+                        parent = parent.parent
+        
+        # Если не нашли через ссылки, пробуем стандартные селекторы
         if not team_rows:
-            # Альтернативный поиск
+            team_rows = soup.find_all('div', class_='ranked-team')
+        
+        if not team_rows:
             team_rows = soup.find_all('tr', class_=re.compile(r'team-row|ranking-row'))
         
         if not team_rows:
-            logger.warning("Не найдены строки с командами, попробуем другой селектор")
-            # Еще один альтернативный поиск
-            ranking_table = soup.find('table', class_='ranking-table')
-            if ranking_table:
-                team_rows = ranking_table.find_all('tr')[1:]  # Пропускаем заголовок
+            # Ищем все строки таблицы, которые могут содержать команды
+            all_rows = soup.find_all('tr')
+            team_rows = [row for row in all_rows if row.find('a', href=re.compile(r'/team/\d+/'))]
         
         logger.info(f"Найдено строк с командами: {len(team_rows)}")
         
@@ -281,13 +423,17 @@ class TeamParser:
                             self.player_parser.save_player_to_database(player_info)
                         
                         # Пауза между парсингом игроков
-                        time.sleep(2)
+                        player_delay = 5
+                        logger.info(f"Пауза {player_delay} секунд перед следующим игроком...")
+                        time.sleep(player_delay)
                 
                 teams.append(team_info)
                 logger.info(f"Команда {team_info['name']} обработана успешно")
                 
                 # Пауза между обработкой команд
-                time.sleep(1)
+                team_delay = 3
+                logger.info(f"Пауза {team_delay} секунд перед следующей командой...")
+                time.sleep(team_delay)
                 
             except Exception as e:
                 logger.error(f"Ошибка при обработке команды {i + 1}: {e}")

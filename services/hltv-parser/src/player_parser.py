@@ -33,9 +33,9 @@ class PlayerParser:
         self._init_driver()
     
     def _init_driver(self):
-        """Инициализация headless Firefox драйвера"""
+        """Инициализация headless Firefox драйвера с обходом защиты от ботов"""
         try:
-            logger.info("Инициализируем headless Firefox для парсера игроков...")
+            logger.info("Инициализируем stealth Firefox для парсера игроков...")
             
             # Автоматически устанавливаем geckodriver
             geckodriver_autoinstaller.install()
@@ -45,42 +45,72 @@ class PlayerParser:
             firefox_options.add_argument("--no-sandbox")
             firefox_options.add_argument("--disable-dev-shm-usage")
             firefox_options.add_argument("--window-size=1920,1080")
-            firefox_options.add_argument("--disable-blink-features=AutomationControlled")
             
-            # Настраиваем профиль Firefox для максимальной производительности
+            # Настраиваем профиль Firefox для обхода детекции ботов
             firefox_profile = webdriver.FirefoxProfile()
             
-            # Реалистичный User-Agent
-            firefox_profile.set_preference("general.useragent.override", 
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0")
+            # Стандартный User-Agent
+            user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0"
+            firefox_profile.set_preference("general.useragent.override", user_agent)
+            logger.info(f"Используем User-Agent: {user_agent}")
             
-            # Отключаем изображения для ускорения
-            firefox_profile.set_preference("permissions.default.image", 2)
+            # Загружаем изображения для более реалистичного поведения
+            firefox_profile.set_preference("permissions.default.image", 1)
             
-            # Настройки для обхода детекции
+            # Настройки для обхода детекции веб-драйвера
             firefox_profile.set_preference("dom.webdriver.enabled", False)
             firefox_profile.set_preference("useAutomationExtension", False)
+            firefox_profile.set_preference("marionette.enabled", False)
             
-            # Настройки для ускорения
-            firefox_profile.set_preference("network.http.pipelining", True)
-            firefox_profile.set_preference("browser.cache.disk.enable", False)
-            firefox_profile.set_preference("browser.cache.memory.enable", False)
-            firefox_profile.set_preference("network.http.use-cache", False)
+            # Отключаем автоматизацию в navigator
+            firefox_profile.set_preference("dom.disable_beforeunload", True)
+            firefox_profile.set_preference("dom.successive_dialog_time_limit", 0)
+            
+            # Настройки для имитации реального браузера
+            firefox_profile.set_preference("network.http.connection-retry-timeout", 0)
+            firefox_profile.set_preference("network.http.connection-timeout", 90)
+            firefox_profile.set_preference("network.http.response.timeout", 90)
+            
+            # Включаем JavaScript (нужен для HLTV)
+            firefox_profile.set_preference("javascript.enabled", True)
+            
+            # Настройки приватности
+            firefox_profile.set_preference("privacy.trackingprotection.enabled", False)
+            firefox_profile.set_preference("network.cookie.cookieBehavior", 0)
+            
+            # Языковые настройки
+            firefox_profile.set_preference("intl.accept_languages", "en-US,en;q=0.9")
+            
+            # Дополнительные настройки для обхода детекции
+            firefox_profile.set_preference("media.peerconnection.enabled", False)
+            firefox_profile.set_preference("media.navigator.enabled", False)
+            firefox_profile.set_preference("webgl.disabled", True)
+            firefox_profile.set_preference("media.autoplay.default", 0)
+            
+            # Настройки времени загрузки
+            firefox_profile.set_preference("network.http.connection-timeout", 120)
+            firefox_profile.set_preference("network.http.response.timeout", 120)
             
             firefox_options.profile = firefox_profile
             
             self.driver = webdriver.Firefox(options=firefox_options)
-            self.driver.set_page_load_timeout(45)
-            self.driver.implicitly_wait(10)
+            self.driver.set_page_load_timeout(60)  # Увеличиваем таймаут
+            self.driver.implicitly_wait(15)
             
-            logger.info("Headless Firefox для парсера игроков инициализирован успешно")
+            # Устанавливаем размер окна для имитации реального браузера
+            self.driver.set_window_size(1920, 1080)
+            
+            # Выполняем JavaScript для дополнительного сокрытия автоматизации
+            self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+            
+            logger.info("Stealth Firefox для парсера игроков инициализирован успешно")
             
         except Exception as e:
             logger.error(f"Ошибка инициализации Firefox драйвера: {e}")
             raise
     
     def _fetch_player_page(self, player_id: int, nickname: str, retries: int = 3) -> Optional[BeautifulSoup]:
-        """Загрузить страницу профиля игрока"""
+        """Загрузить страницу профиля игрока с имитацией человеческого поведения"""
         url = f"{self.BASE_URL}/stats/players/{player_id}/{nickname}"
         
         for attempt in range(retries):
@@ -88,27 +118,59 @@ class PlayerParser:
                 logger.info(f"Загружаем профиль игрока (попытка {attempt + 1}): {url}")
                 
                 if attempt > 0:
-                    time.sleep(5 + attempt * 2)
-                
-                # Сначала загружаем главную страницу HLTV для получения cookies
-                if attempt == 0:
-                    try:
-                        self.driver.get(self.BASE_URL)
-                        time.sleep(2)
-                    except:
-                        pass
+                    delay = 10 + attempt * 5
+                    logger.info(f"Ждем {delay} секунд перед повторной попыткой...")
+                    time.sleep(delay)
                 
                 # Загружаем страницу игрока
+                logger.info(f"Загружаем страницу игрока: {url}")
                 self.driver.get(url)
                 
-                # Ждем загрузки контента
-                time.sleep(3 + attempt)
+                # Ждем загрузки
+                time.sleep(5 + attempt * 2)
+                
+                # Проверяем заголовок страницы
+                page_title = self.driver.title
+                logger.info(f"Заголовок страницы: {page_title}")
+                
+                # Обрабатываем Cloudflare защиту
+                if "just a moment" in page_title.lower() or "checking your browser" in page_title.lower():
+                    logger.info("Обнаружена защита Cloudflare, ждем прохождения проверки...")
+                    
+                    # Ждем до 60 секунд пока Cloudflare не пропустит
+                    cloudflare_wait = 0
+                    max_cloudflare_wait = 60
+                    
+                    while cloudflare_wait < max_cloudflare_wait:
+                        time.sleep(5)
+                        cloudflare_wait += 5
+                        
+                        current_title = self.driver.title
+                        
+                        # Проверяем, прошли ли мы Cloudflare
+                        if "just a moment" not in current_title.lower() and "checking" not in current_title.lower():
+                            logger.info(f"Cloudflare пройден! Новый заголовок: {current_title}")
+                            page_title = current_title
+                            break
+                            
+                        if cloudflare_wait % 15 == 0:
+                            logger.info(f"Ждем Cloudflare... ({cloudflare_wait}/{max_cloudflare_wait}s)")
+                    
+                    if cloudflare_wait >= max_cloudflare_wait:
+                        logger.warning("Cloudflare не пропустил за отведенное время")
+                        if attempt < retries - 1:
+                            time.sleep(60)
+                            continue
+                        else:
+                            return None
                 
                 # Проверяем на блокировку или ошибки
-                if "Access Denied" in self.driver.title or "403" in self.driver.title or "Not Found" in self.driver.title:
-                    logger.warning(f"Страница заблокирована или не найдена (попытка {attempt + 1}): {self.driver.title}")
+                if any(keyword in page_title.lower() for keyword in ["access denied", "403", "forbidden", "blocked"]):
+                    logger.warning(f"Страница заблокирована (попытка {attempt + 1}): {page_title}")
                     if attempt < retries - 1:
-                        time.sleep(10 + attempt * 5)
+                        block_delay = 30 + attempt * 15
+                        logger.info(f"Ждем {block_delay} секунд из-за блокировки...")
+                        time.sleep(block_delay)
                         continue
                     else:
                         return None
@@ -117,8 +179,15 @@ class PlayerParser:
                 html = self.driver.page_source
                 logger.info(f"Страница игрока загружена успешно, размер: {len(html)} символов")
                 
+                # Проверяем качество полученных данных
                 if len(html) < 1000:
                     logger.warning("Получена подозрительно короткая страница")
+                    if attempt < retries - 1:
+                        continue
+                
+                # Проверяем наличие ключевых элементов HLTV
+                if "hltv" not in html.lower() or "player" not in html.lower():
+                    logger.warning("Страница не содержит ожидаемый контент HLTV")
                     if attempt < retries - 1:
                         continue
                 
@@ -127,7 +196,9 @@ class PlayerParser:
             except Exception as e:
                 logger.error(f"Ошибка при загрузке профиля игрока {url} (попытка {attempt + 1}): {e}")
                 if attempt < retries - 1:
-                    time.sleep(8 + attempt * 3)
+                    error_delay = 15 + attempt * 5
+                    logger.info(f"Ждем {error_delay} секунд после ошибки...")
+                    time.sleep(error_delay)
                     continue
                 return None
         
