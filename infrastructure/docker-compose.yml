@@ -84,6 +84,20 @@ services:
       retries: 5
       start_period: 30s
 
+  # HLTV parsers (team/player/match)
+  hltv-parser:
+    build:
+      context: ../services/hltv-parser
+      dockerfile: Dockerfile
+    container_name: cs2_hltv_parser
+    depends_on:
+      - postgresql
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgresql:5432/cs2_predictions
+    networks:
+      - cs2_network
+    restart: unless-stopped
+
 volumes:
   postgres_data:
     driver: local

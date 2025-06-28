@@ -244,9 +244,9 @@ class PlayerParser:
             'impact': None,
             'adr': None,
             'kd_ratio': None,
-            'kast': None,
             'dpr': None,
             'kpr': None,
+            'apr': None,
             'maps_played': 0
         }
         
@@ -255,26 +255,29 @@ class PlayerParser:
             stat_rows = soup.find_all('div', class_='stats-row')
             for row in stat_rows:
                 children = row.find_all('span')
-                if len(children) == 2:
-                    stat_name = children[0].text.strip().lower()
-                    stat_value = children[1].text.strip()
+                if len(children) < 2:
+                    continue
 
-                    try:
-                        if 'rating' in stat_name:
-                            stats['rating_2_0'] = float(stat_value)
-                        elif 'k/d ratio' in stat_name:
-                            stats['kd_ratio'] = float(stat_value)
-                        elif 'damage / round' in stat_name:
-                            stats['adr'] = float(stat_value)
-                        elif 'deaths / round' in stat_name:
-                            stats['dpr'] = float(stat_value)
-                        elif 'kills / round' in stat_name:
-                            stats['kpr'] = float(stat_value)
-                        elif 'maps played' in stat_name:
-                            stats['maps_played'] = int(stat_value)
-                    except (ValueError, IndexError):
-                        logger.warning(f"Не удалось обработать значение '{stat_value}' для '{stat_name}'")
-                        continue
+                stat_name = children[0].get_text(strip=True).lower()
+                stat_value = children[-1].get_text(strip=True)
+                logger.info(f"{stat_name}")
+                logger.info(f"{stat_value}")
+                try:
+                    if 'rating' in stat_name:
+                        stats['rating_2_0'] = float(stat_value)
+                    elif 'k/d ratio' in stat_name:
+                        stats['kd_ratio'] = float(stat_value)
+                    elif 'damage / round' in stat_name:
+                        stats['adr'] = float(stat_value)
+                    elif 'deaths / round' in stat_name:
+                        stats['dpr'] = float(stat_value)
+                    elif 'kills / round' in stat_name:
+                        stats['kpr'] = float(stat_value)
+                    elif 'assists / round' in stat_name:
+                        stats['apr'] = float(stat_value)
+                except (ValueError, IndexError):
+                    logger.warning(f"Не удалось обработать значение '{stat_value}' для '{stat_name}'")
+                    continue
 
             # Старый подход для KAST и Impact, которые могут быть в другом блоке
             stat_breakdown = soup.find_all('div', class_='summaryStatBreakdownRow')
@@ -285,12 +288,9 @@ class PlayerParser:
                 if data_name_div and data_value_div:
                     stat_name = data_name_div.text.strip().lower()
                     stat_value = data_value_div.text.strip()
-                    
                     try:
                         if 'impact' in stat_name:
                             stats['impact'] = float(stat_value)
-                        elif 'kast' in stat_name:
-                            stats['kast'] = float(stat_value.replace('%', ''))
                     except (ValueError, IndexError):
                         logger.warning(f"Не удалось обработать значение (breakdown) '{stat_value}' для '{stat_name}'")
                         continue
@@ -338,12 +338,9 @@ class PlayerParser:
             ).first()
             
             if existing_player:
-                # Обновляем существующего игрока
+                # Обновляем существующего игрока (без полей страны, возраста и аватара)
                 existing_player.nickname = player_data['nickname']
                 existing_player.real_name = player_data['real_name']
-                existing_player.country_code = player_data['country_code']
-                existing_player.country_name = player_data['country_name']
-                existing_player.age = player_data['age']
                 existing_player.hltv_url = player_data['hltv_url']
                 existing_player.is_active = True
                 
@@ -356,9 +353,6 @@ class PlayerParser:
                     hltv_id=player_data['hltv_id'],
                     nickname=player_data['nickname'],
                     real_name=player_data['real_name'],
-                    country_code=player_data['country_code'],
-                    country_name=player_data['country_name'],
-                    age=player_data['age'],
                     hltv_url=player_data['hltv_url'],
                     is_active=True
                 )
@@ -398,8 +392,8 @@ class PlayerParser:
                 existing_stats.rating_2_0 = stats.get('rating_2_0')
                 existing_stats.kd_ratio = stats.get('kd_ratio')
                 existing_stats.adr = stats.get('adr')
-                existing_stats.kast = stats.get('kast')
                 existing_stats.kills_per_round = stats.get('kpr')
+                existing_stats.assists_per_round = stats.get('apr')
                 existing_stats.deaths_per_round = stats.get('dpr')
                 existing_stats.maps_played = stats.get('maps_played', 0)
                 existing_stats.last_updated = datetime.now()
@@ -413,8 +407,8 @@ class PlayerParser:
                     rating_2_0=stats.get('rating_2_0'),
                     kd_ratio=stats.get('kd_ratio'),
                     adr=stats.get('adr'),
-                    kast=stats.get('kast'),
                     kills_per_round=stats.get('kpr'),
+                    assists_per_round=stats.get('apr'),
                     deaths_per_round=stats.get('dpr'),
                     maps_played=stats.get('maps_played', 0),
                     period_start=period_start,

@@ -26,7 +26,7 @@ logger = logging.getLogger("runner.team_parser")
 def main() -> None:
     """Entry-point for parsing the current HLTV top-team ranking."""
     with TeamParser() as parser:
-        teams = parser.parse_team_ranking(max_teams=30)
+        teams = parser.parse_team_ranking(max_teams=241)
         logger.info("Parsed and saved %s teams from ranking", len(teams))
 
 

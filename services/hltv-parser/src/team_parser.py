@@ -391,18 +391,6 @@ class TeamParser:
             # Вычисляем tag (до 10 символов) — берём первые буквы слов
             default_tag = ''.join([w[0] for w in team_data['name'].split()][:4]).upper()[:10]
 
-            # Находим любую страну из игроков, если она есть
-            country_code = None
-            country_name = None
-            if team_data.get('players'):
-                for p in team_data['players']:
-                    cc = p.get('country_code')
-                    cn = p.get('country_name')
-                    if cc:
-                        country_code = cc
-                        country_name = cn
-                        break
-
             if existing_team:
                 # Обновляем существующую команду
                 team = existing_team
@@ -413,9 +401,6 @@ class TeamParser:
                 team.points = points
                 team.hltv_url = team_data['hltv_url']
 
-                if country_code:
-                    team.country_code = country_code
-                    team.country_name = country_name or country_code
                 if not team.tag:
                     team.tag = default_tag
             
@@ -428,8 +413,6 @@ class TeamParser:
                     points=points,
                     hltv_url=team_data['hltv_url'],
                     tag=default_tag,
-                    country_code=country_code or '',
-                    country_name=country_name or '',
                     is_active=True,
                 )
                 
