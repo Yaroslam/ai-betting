@@ -11,6 +11,7 @@ from datetime import datetime, date, timedelta
 import calendar
 from selenium import webdriver
 from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.firefox.service import Service as FirefoxService
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -40,8 +41,8 @@ class TeamParser:
         try:
             logger.info("Инициализируем stealth Firefox для парсера команд...")
             
-            # Автоматически устанавливаем geckodriver
-            geckodriver_autoinstaller.install()
+            # Автоматически устанавливаем geckodriver и получаем путь
+            geckodriver_path = geckodriver_autoinstaller.install()
             
             firefox_options = Options()
             firefox_options.add_argument("--headless")
@@ -96,7 +97,8 @@ class TeamParser:
             
             firefox_options.profile = firefox_profile
             
-            self.driver = webdriver.Firefox(options=firefox_options)
+            service = FirefoxService(executable_path=geckodriver_path)
+            self.driver = webdriver.Firefox(service=service, options=firefox_options)
             self.driver.set_page_load_timeout(60)  # Увеличиваем таймаут
             self.driver.implicitly_wait(15)
             
@@ -349,8 +351,12 @@ class TeamParser:
                 for player_info in team_data['players']:
                     player_data = self.player_parser.parse_player(player_info['id'], player_info['nickname'])
                     if player_data:
+                        # Сохраняем/обновляем данные игрока в БД сразу,
+                        # чтобы к моменту записи ростера игрок уже существовал.
+                        self.player_parser.save_player_to_database(player_data)
+
                         parsed_players.append(player_data)
-                        logger.info(f"  - Игрок {player_info['nickname']} спарсен успешно.")
+                        logger.info(f"  - Игрок {player_info['nickname']} спарсен и сохранён успешно.")
                     else:
                         logger.warning(f"  - Не удалось спарсить игрока {player_info['nickname']}.")
                     
@@ -365,6 +371,8 @@ class TeamParser:
             # Задержка между запросами к командам
             time.sleep(10)
 
+            self.save_team_to_database(team_data)
+
         logger.info(f"Парсинг топ-{len(teams)} команд завершен.")
         return teams
     
@@ -376,30 +384,53 @@ class TeamParser:
                 Team.hltv_id == team_data['hltv_id']
             ).first()
             
+            # Подготовка безопасных значений
+            rank = team_data.get('rank') or 0
+            points = team_data.get('points') or 0
+
+            # Вычисляем tag (до 10 символов) — берём первые буквы слов
+            default_tag = ''.join([w[0] for w in team_data['name'].split()][:4]).upper()[:10]
+
+            # Находим любую страну из игроков, если она есть
+            country_code = None
+            country_name = None
+            if team_data.get('players'):
+                for p in team_data['players']:
+                    cc = p.get('country_code')
+                    cn = p.get('country_name')
+                    if cc:
+                        country_code = cc
+                        country_name = cn
+                        break
+
             if existing_team:
                 # Обновляем существующую команду
-                existing_team.name = team_data['name']
-                existing_team.current_rank = team_data['rank']
-                existing_team.points = team_data['points']
-                existing_team.hltv_url = team_data['hltv_url']
-                existing_team.last_updated = datetime.now()
-                
                 team = existing_team
                 logger.info(f"Обновлена команда: {team_data['name']}")
-                
+
+                team.name = team_data['name']
+                team.world_ranking = rank
+                team.points = points
+                team.hltv_url = team_data['hltv_url']
+
+                if country_code:
+                    team.country_code = country_code
+                    team.country_name = country_name or country_code
+                if not team.tag:
+                    team.tag = default_tag
+            
             else:
                 # Создаем новую команду
                 team = Team(
                     hltv_id=team_data['hltv_id'],
                     name=team_data['name'],
-                    current_rank=team_data['rank'],
-                    points=team_data['points'],
+                    world_ranking=rank,
+                    points=points,
                     hltv_url=team_data['hltv_url'],
-                    country_code='',  # Заполнится из информации игроков
-                    country_name='',
-                    created_at=datetime.now(),
-                    last_updated=datetime.now(),
-                    is_active=True
+                    tag=default_tag,
+                    country_code=country_code or '',
+                    country_name=country_name or '',
+                    is_active=True,
                 )
                 
                 self.db.add(team)
@@ -425,22 +456,32 @@ class TeamParser:
             # Удаляем старый состав
             self.db.query(TeamRoster).filter(TeamRoster.team_id == team_id).delete()
             
-            # Добавляем новый состав
+            # Добавляем новый состав, избегая дублей
+            now = datetime.now()
             for player_data in players:
                 player = self.db.query(Player).filter(
                     Player.hltv_id == player_data['hltv_id']
                 ).first()
-                
-                if player:
-                    roster_entry = TeamRoster(
-                        team_id=team_id,
-                        player_id=player.id,
-                        role='Player',  # Базовая роль
-                        joined_at=datetime.now(),
-                        is_active=True
-                    )
-                    
-                    self.db.add(roster_entry)
+                if not player:
+                    continue
+
+                # Проверяем, нет ли уже активной записи игрока в ростере
+                exists = self.db.query(TeamRoster).filter(
+                    TeamRoster.team_id == team_id,
+                    TeamRoster.player_id == player.id,
+                    TeamRoster.left_at.is_(None)
+                ).first()
+                if exists:
+                    continue
+
+                roster_entry = TeamRoster(
+                    team_id=team_id,
+                    player_id=player.id,
+                    role='Player',  # Базовая роль
+                    joined_at=now,
+                    is_active=True
+                )
+                self.db.add(roster_entry)
             
             self.db.commit()
             logger.info(f"Сохранен состав команды ID {team_id}: {len(players)} игроков")

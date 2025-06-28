@@ -19,7 +19,7 @@ Base = declarative_base()
 # Настройки подключения к БД
 DATABASE_URL = os.getenv(
     'DATABASE_URL',
-    f"postgresql://{os.getenv('DB_USER', 'postgres')}:{os.getenv('DB_PASSWORD', 'password')}@{os.getenv('DB_HOST', 'localhost')}:{os.getenv('DB_PORT', '5432')}/{os.getenv('DB_NAME', 'ai_betting')}"
+    f"postgresql://{os.getenv('DB_USER', 'postgres')}:{os.getenv('DB_PASSWORD', 'postgres')}@{os.getenv('DB_HOST', 'localhost')}:{os.getenv('DB_PORT', '5432')}/{os.getenv('DB_NAME', 'cs2_predictions')}"
 )
 
 # Создаем движок и сессию
